@@ -50,7 +50,86 @@ Number of cases by Genomics Data Type for Rectal Adenocarcinoma
 TCGAbiolinks:::getProjectSummary("TCGA-READ")
 ```
 
-### Obtain Colon Adenocarconoma datasets COAD
+### Obtaining RNA-Sequencing and clinical data for patients
+
+```{r}
+CRC_RNAseq = GDCquery(
+  project = c("TCGA-COAD", "TCGA-READ" ),
+  data.category = "Transcriptome Profiling", 
+  data.type = "Gene Expression Quantification",
+  experimental.strategy = "RNA-Seq",
+  workflow.type = "STAR - Counts")
+
+crc_res = getResults(CRC_RNAseq) 
+colnames(crc_res)
+# first 6 types of tumor tissue
+head(crc_res$sample_type)
+
+# summary of distinct tissues types present in this study
+summary(factor(crc_res$sample_type))
+```
+There are 51 normal tissue samples, 647 primary CRC tumor types, 1 Metastatic and 2 Recurrent Tumor types. Filtering the dataset to include only Primary and Normal solid tissue types.
+
+```{r}
+CRC_TCGA = GDCquery(
+  project = c("TCGA-COAD", "TCGA-READ"),
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  experimental.strategy = "RNA-Seq",
+  workflow.type = "STAR - Counts",
+  sample.type = c("Primary Tumor", "Solid Tissue Normal"))
+
+#GDCdownload(query = CRC_TCGA)
+crc_data = GDCprepare(CRC_TCGA)
+```
+```{r}
+dim(crc_data)
+colnames(colData(crc_data))
+(crc_data$age_at_diagnosis) #Age may be in number of days
+plot(crc_data$age_at_diagnosis/365, crc_data$age_at_index) 
+
+```
+
+
+We have data from 698 patients. Both clinical and gene expression data are present in this object.
+There is also close correlation between the age of diagnosis and age at which samples were indexed.
+
+```{r}
+table(crc_data@colData$vital_status)
+```
+Of these 549 patients are still alive. 
+
+```{r}
+table(crc_data@colData$ajcc_pathologic_stage)
+crc_data$prior_treatment
+crc_data$treatments[[5]]$treatment_type
+
+```
+
+Tumor Staging Data is present for the CRC tumors.
+To an extent, treatment information is also present
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+### Obtain Colon Adenocarconoma SNV datasets COAD
 Querying all Single Nucleotide Variation data from COAD project
 READ is rectal adenocarcinoma
 ```{r}
@@ -67,13 +146,14 @@ View(getResults(query_COAD))
 View(getResults(query_READ))
 ```
 
-@Querying Data for Somatic Mutations in Colon and Rectum Adenocarcinoma
+### Querying Data for Somatic Mutations in Colon and Rectum Adenocarcinoma
 ```{r}
 coad_res = getResults(query_COAD) # make results as table
 # head(lihc_res) # data of the first 6 patients.
 colnames(coad_res) # columns present in the table
 head(coad_res$sample_type) # first 6 types of tissue.
 summary(factor(coad_res$sample_type)) # summary of distinct tissues types present in this study
+summary(factor(coad_res$))
 
 read_res = getResults(query_READ) # make results as table
 # head(lihc_res) # data of the first 6 patients.
@@ -103,8 +183,8 @@ library("TimeSeriesExperiment")
 dim(coad_data)
 dim(read_data)
 library(SummarizedExperiment)
-colnames(SummarizedExperiment::colData(coad_data))
-colnames(colData(read_data))
+#colnames(SummarizedExperiment::colData(coad_data))
+#colnames(colData(read_data))
 
 ```
 
