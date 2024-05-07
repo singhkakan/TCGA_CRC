@@ -44,9 +44,10 @@ TCGAbiolinks:::getProjectSummary("TCGA-COAD")
 
 #Obtain Colon Adenocarconoma datasets COAD
 #Querying all RNA-seq data from COAD project
+#READ is rectal adenocarcinoma
 ```{r}
 query_TCGA = GDCquery(
-  project = "TCGA-COAD",
+  project = c("TCGA-COAD", "TCGA-READ"),
   data.category = "Transcriptome Profiling",
   experimental.strategy = "RNA-Seq",
   workflow.type = "STAR - Counts")
@@ -55,14 +56,19 @@ View(getResults(query_TCGA))
 
 
 ```{r}
-lihc_res = getResults(query_TCGA) # make results as table
+coad_res = getResults(query_TCGA) # make results as table
 # head(lihc_res) # data of the first 6 patients.
-colnames(lihc_res) # columns present in the table
+colnames(coad_res) # columns present in the table
+
+head(coad_res$sample_type) # first 6 types of tissue.
+summary(factor(lihc_res$sample_type)) # summary of distinct tissues types present in this study
+
 ```
+There are 82 normal tissue samples
 
-
+Downloading the data file
 ```{r}
-
+GDCdownload(query = query_TCGA)
 ```
 
 
