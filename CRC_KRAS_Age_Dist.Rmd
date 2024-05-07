@@ -33,15 +33,17 @@ setwd("~/Documents/TCGA/TCGA/")
 library(TCGAbiolinks)
 GDCprojects = getGDCprojects()
 head(GDCprojects[c("project_id", "name")])
-TCGAbiolinks:::getProjectSummary("TCGA-LIHC")
+TCGAbiolinks:::getProjectSummary("TCGA-COAD")
 
 #if (!require("BiocManager", quietly = TRUE))
 #    install.packages("BiocManager")
 #BiocManager::install("TCGAbiolinks")
 
+
 ```
 
 #Obtain Colon Adenocarconoma datasets COAD
+#Querying all RNA-seq data from COAD project
 ```{r}
 query_TCGA = GDCquery(
   project = "TCGA-COAD",
