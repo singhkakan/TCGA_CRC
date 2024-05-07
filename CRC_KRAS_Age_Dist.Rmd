@@ -46,24 +46,37 @@ TCGAbiolinks:::getProjectSummary("TCGA-COAD")
 #Querying all RNA-seq data from COAD project
 #READ is rectal adenocarcinoma
 ```{r}
-query_TCGA = GDCquery(
-  project = c("TCGA-COAD", "TCGA-READ"),
+query_COAD = GDCquery(
+  project = "TCGA-COAD",
   data.category = "Transcriptome Profiling",
   experimental.strategy = "RNA-Seq",
   workflow.type = "STAR - Counts")
-View(getResults(query_TCGA))
+query_READ = GDCquery(
+  project =  "TCGA-READ",
+  data.category = "Transcriptome Profiling",
+  experimental.strategy = "RNA-Seq",
+  workflow.type = "STAR - Counts")
+
+View(getResults(query_COAD))
+View(getResults(query_READ))
 ```
 
 
 ```{r}
-coad_res = getResults(query_TCGA) # make results as table
+coad_res = getResults(query_COAD) # make results as table
 # head(lihc_res) # data of the first 6 patients.
 colnames(coad_res) # columns present in the table
-
 head(coad_res$sample_type) # first 6 types of tissue.
-summary(factor(lihc_res$sample_type)) # summary of distinct tissues types present in this study
+summary(factor(coad_res$sample_type)) # summary of distinct tissues types present in this study
+
+read_res = getResults(query_READ) # make results as table
+# head(lihc_res) # data of the first 6 patients.
+colnames(read_res) # columns present in the table
+head(read_res$sample_type) # first 6 types of tissue.
+summary(factor(read_res$sample_type)) # summary of distinct tissues types present in this study
 
 ```
+
 There are 82 normal tissue samples
 
 Downloading the data file
