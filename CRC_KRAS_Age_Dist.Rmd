@@ -110,17 +110,22 @@ Tumor Staging Data is present for the CRC tumors.
 To an extent, treatment information is also present
 
 ```{r}
+table(crc_data@colData$tissue_or_organ_of_origin)
+```
+Tissue of origin tells us what type of cancer the patient has.
 
+```{r}
+table(crc_data@colData$gender)
 ```
 
 
 ```{r}
-
-```
-
-
-```{r}
-
+#We have clinical information of the patients
+table(crc_data@colData$age_at_diagnosis/365)
+table(crc_data@colData$age_at_index)
+histogram((crc_data@colData$age_at_index), 
+          xlab = "Age",
+          breaks=20)
 ```
 
 
