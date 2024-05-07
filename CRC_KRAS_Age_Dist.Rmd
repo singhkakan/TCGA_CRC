@@ -9,6 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library("TCGAbiolinks")
+#if (!require("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("limma")
 library("limma")
 library("edgeR")
 library("glmnet")
@@ -28,6 +31,7 @@ setwd("~/Documents/TCGA/TCGA/")
 
 ## R Markdown
 
+Number of cases by Genomics Data Type for Colon adenocarcinoma
 ```{r}
 #TCGA Data
 library(TCGAbiolinks)
@@ -39,29 +43,31 @@ TCGAbiolinks:::getProjectSummary("TCGA-COAD")
 #    install.packages("BiocManager")
 #BiocManager::install("TCGAbiolinks")
 
-
 ```
 
-#Obtain Colon Adenocarconoma datasets COAD
-#Querying all RNA-seq data from COAD project
-#READ is rectal adenocarcinoma
+Number of cases by Genomics Data Type for Rectal Adenocarcinoma
+```{r}
+TCGAbiolinks:::getProjectSummary("TCGA-READ")
+```
+
+### Obtain Colon Adenocarconoma datasets COAD
+Querying all Single Nucleotide Variation data from COAD project
+READ is rectal adenocarcinoma
 ```{r}
 query_COAD = GDCquery(
   project = "TCGA-COAD",
-  data.category = "Transcriptome Profiling",
-  experimental.strategy = "RNA-Seq",
-  workflow.type = "STAR - Counts")
+  data.category = "Simple Nucleotide Variation",
+  data.type = "Masked Somatic Mutation" )
 query_READ = GDCquery(
   project =  "TCGA-READ",
-  data.category = "Transcriptome Profiling",
-  experimental.strategy = "RNA-Seq",
-  workflow.type = "STAR - Counts")
+  data.category = "Simple Nucleotide Variation",
+  data.type = "Masked Somatic Mutation")
 
 View(getResults(query_COAD))
 View(getResults(query_READ))
 ```
 
-
+@Querying Data for Somatic Mutations in Colon and Rectum Adenocarcinoma
 ```{r}
 coad_res = getResults(query_COAD) # make results as table
 # head(lihc_res) # data of the first 6 patients.
@@ -79,9 +85,37 @@ summary(factor(read_res$sample_type)) # summary of distinct tissues types presen
 
 There are 82 normal tissue samples
 
-Downloading the data file
+Downloading the somatic mutations Data File data file
 ```{r}
-GDCdownload(query = query_TCGA)
+GDCdownload(query = query_COAD)
+GDCdownload(query = query_READ)
+```
+
+#Loading the data in R
+```{r}
+coad_data = GDCprepare(query_COAD)
+read_data = GDCprepare(query_READ)
+
+install.packages("remotes")
+remotes::install_github("nlhuong/TimeSeriesExperiment")
+
+library("TimeSeriesExperiment")
+dim(coad_data)
+dim(read_data)
+library(SummarizedExperiment)
+colnames(SummarizedExperiment::colData(coad_data))
+colnames(colData(read_data))
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
 ```
 
 
