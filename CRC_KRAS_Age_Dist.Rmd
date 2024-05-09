@@ -24,7 +24,7 @@ library("survival")
 library("survminer")
 library("RColorBrewer")
 library("gProfileR")
-library("genefilter")
+#library("genefilter")
 
 setwd("~/Documents/TCGA/TCGA/")
 ```
@@ -90,7 +90,6 @@ plot(crc_data$age_at_diagnosis/365, crc_data$age_at_index)
 
 ```
 
-
 We have data from 698 patients. Both clinical and gene expression data are present in this object.
 There is also close correlation between the age of diagnosis and age at which samples were indexed.
 
@@ -111,6 +110,7 @@ To an extent, treatment information is also present
 
 ```{r}
 table(crc_data@colData$tissue_or_organ_of_origin)
+crc_data@colData
 ```
 Tissue of origin tells us what type of cancer the patient has.
 
@@ -127,6 +127,64 @@ histogram((crc_data@colData$age_at_index),
           xlab = "Age",
           breaks=20)
 ```
+Most CRC patients fall in the age range of 65-75 years
+
+```{r}
+table(crc_data@colData$race)
+```
+We have race information for nearly half of the patients.
+
+```{r}
+dim(assay(crc_data))
+head(assay(crc_data)[,1:10]) # expression of first 6 genes and first 10 samples
+
+head(rowData(crc_data))#ensembl id and gene id of the first 6 genes.
+
+(rowData(crc_data))
+#head(dge$counts[,which(dge$genes[,"gene_name"])])
+
+# Save the data as a file, if you need it later, you can just load this file
+# instead of having to run the whole pipeline again
+saveRDS(object = crc_data,
+        file = "crc_RNAseq_data.RDS",
+        compress = FALSE)
+```
+
+
+```{r Limma Pipeline for identifying DE Genes}
+clinical_data = colData(crc_data)
+group = factor(clinical_data$definition)
+group = relevel(group, ref="Solid Tissue Normal")
+
+design = model.matrix(~group)
+head(design)
+
+#Remove genes, which have low amount of counts
+dge = DGEList( # creating a DGEList object
+  counts=assay(crc_data),
+  design = model.matrix(~group),
+  samples=colData(crc_data),
+  genes=as.data.frame(rowData(crc_data)))
+
+# filtering
+keep = filterByExpr(dge, design, min.count=10) # defining which genes to keep
+length(which(keep))
+length(which(keep==FALSE))
+dge = dge[keep,,keep.lib.sizes=FALSE] # filtering the dge object
+length(which(keep))
+length(which(keep==FALSE))
+rm(keep) #  use rm() to remove objects from memory if you don't need them anymore
+
+dge = calcNormFactors(dge,method="TMM")
+v = voom(dge,design,plot=TRUE)
+#using lmFit lets fit a series of linear models, one to each of the probes. These data will then be fed to eBayes to produce a complex object which holds a number of statistics that we can use to rank the differentially expressed genes.
+fit = lmFit(v, design)
+fit = eBayes(fit)
+
+topGenes = topTable(fit, coef=1, sort.by="p", number = 1000)
+print(topGenes)
+
+```
 
 
 ```{r}
@@ -138,69 +196,108 @@ histogram((crc_data@colData$age_at_index),
 Querying all Single Nucleotide Variation data from COAD project
 READ is rectal adenocarcinoma
 ```{r}
-query_COAD = GDCquery(
-  project = "TCGA-COAD",
-  data.category = "Simple Nucleotide Variation",
-  data.type = "Masked Somatic Mutation" )
-query_READ = GDCquery(
-  project =  "TCGA-READ",
+CRC_Mut = GDCquery(
+  project = c("TCGA-COAD","TCGA-READ"),
   data.category = "Simple Nucleotide Variation",
   data.type = "Masked Somatic Mutation")
 
-View(getResults(query_COAD))
-View(getResults(query_READ))
+View(getResults(CRC_Mut))
+
+# Get all patients that have DNA methylation and gene expression.
+common.patients <- intersect(
+    substr(getResults(CRC_TCGA, cols = "cases"), 1, 12),
+    substr(getResults(CRC_Mut, cols = "cases"), 1, 12))
+head(common.patients)
+
 ```
 
 ### Querying Data for Somatic Mutations in Colon and Rectum Adenocarcinoma
 ```{r}
-coad_res = getResults(query_COAD) # make results as table
-# head(lihc_res) # data of the first 6 patients.
-colnames(coad_res) # columns present in the table
-head(coad_res$sample_type) # first 6 types of tissue.
-summary(factor(coad_res$sample_type)) # summary of distinct tissues types present in this study
-summary(factor(coad_res$))
-
-read_res = getResults(query_READ) # make results as table
-# head(lihc_res) # data of the first 6 patients.
-colnames(read_res) # columns present in the table
-head(read_res$sample_type) # first 6 types of tissue.
-summary(factor(read_res$sample_type)) # summary of distinct tissues types present in this study
+CRC_Mut_res = getResults(CRC_Mut) # make results as table
+colnames(CRC_Mut) # columns present in the table
+head(CRC_Mut$sample_type) # first 6 types of tissue.
+summary(factor(CRC_Mut_res$sample_type)) # summary of distinct tissues types present in this study
 
 ```
 
 There are 82 normal tissue samples
-
-Downloading the somatic mutations Data File data file
+`
+Downloading the somatic mutations Data File
 ```{r}
-GDCdownload(query = query_COAD)
-GDCdownload(query = query_READ)
+GDCdownload(query = CRC_Mut)
+
 ```
 
 #Loading the data in R
 ```{r}
-coad_data = GDCprepare(query_COAD)
-read_data = GDCprepare(query_READ)
+CRC_Mut_data = GDCprepare(CRC_Mut)
+dim(CRC_Mut_data)
+```
 
-install.packages("remotes")
-remotes::install_github("nlhuong/TimeSeriesExperiment")
 
-library("TimeSeriesExperiment")
-dim(coad_data)
-dim(read_data)
-library(SummarizedExperiment)
-#colnames(SummarizedExperiment::colData(coad_data))
-#colnames(colData(read_data))
+```{r}
+which(CRC_Mut_data$HGVSp_Short=="p.G12D")
+
+crc_mut_sub1 <- CRC_Mut_data[unlist(lapply(common.patients, function(x) grep(x, CRC_Mut_data$Tumor_Sample_Barcode))),]
+
+crc_mut_sub2 <- crc_mut_sub1[which(crc_mut_sub1$Hugo_Symbol=="KRAS"),]
+crc_mut_sub3 <- crc_mut_sub2[which(crc_mut_sub2$HGVSp_Short=="p.G12D"),]
+
+crc_mut_sub1$patient <- substr(crc_mut_sub1$Tumor_Sample_Barcode, 1, 12)
+crc_mut_sub2$patient <- substr(crc_mut_sub2$Tumor_Sample_Barcode, 1, 12)
+crc_mut_sub3$patient <- substr(crc_mut_sub3$Tumor_Sample_Barcode, 1, 12)
+
+
+head(crc_data@colData$patient)
+head(crc_data@colData$age_at_index)
+head(crc_data@colData$age_at_diagnosis)
+head(crc_data@colData$gender)
+pt_id_age <- as.data.frame(cbind(crc_data@colData$patient, crc_data@colData$age_at_index, crc_data@colData$age_at_diagnosis, crc_data@colData$gender))
+colnames(pt_id_age) <- c("patient", "age_at_index", "age_at_diagnosis", "gender")
+pt_id_age$age_at_index <- as.numeric(pt_id_age$age_at_index)
+pt_id_age$age_at_diagnosis <- as.numeric(pt_id_age$age_at_diagnosis)
+pt_id_age$age_at_diagnosis <- (pt_id_age$age_at_diagnosis)/365
+pt_id_age$gender <- as.factor(pt_id_age$gender)
+
+
+library(dplyr)
+crc_mut_sub1 <- full_join(crc_mut_sub1, pt_id_age, by="patient", relationship = "many-to-many")
+crc_mut_sub2 <- full_join(crc_mut_sub2, pt_id_age, by="patient", relationship = "many-to-many")
+crc_mut_sub2[which(is.na(crc_mut_sub2$Hugo_Symbol)),"Hugo_Symbol"] <- "No_KRAS"
+crc_mut_sub3 <- full_join(crc_mut_sub3, pt_id_age, by="patient", relationship = "many-to-many")
+crc_mut_sub3[which(is.na(crc_mut_sub3$Hugo_Symbol)),"Hugo_Symbol"] <- "No_KRAS"
+crc_mut_sub3$Hugo_Symbol <- as.factor(crc_mut_sub3$Hugo_Symbol)
+crc_mut_sub3$patient <- as.factor(crc_mut_sub3$patient)
+crc_mut_sub3$HGVSp_Short <- as.factor(crc_mut_sub3$HGVSp_Short)
+
+
+
+library(ggsci)
+
+ggplot(crc_mut_sub2, aes(x=age_at_diagnosis, color=Hugo_Symbol)) +
+  geom_histogram(binwidth = 5, fill="white") +
+  labs(title="Distribution of CRC patients with KRAS mutations") +
+  scale_color_jco() +
+  theme_minimal()
+
+ggplot(crc_mut_sub3, aes(x=age_at_diagnosis, fill=HGVSp_Short, color=Hugo_Symbol)) +
+  geom_histogram(binwidth = 10) +
+  scale_fill_aaas() +
+  scale_color_jco() +
+  theme_minimal()
 
 ```
 
 
 ```{r}
-
-```
-
-
-```{r}
-
+colourCount = length(unique(crc_mut_sub2$HGVSp_Short))
+getPalette = colorRampPalette(brewer.pal(9, "Spectral"))
+ggplot(crc_mut_sub2, aes(x=age_at_diagnosis, color=Hugo_Symbol, fill=HGVSp_Short)) +
+  geom_histogram(binwidth = 5) +
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Accent"))(colourCount), na.value = "white") +
+  #labs(title="Distribution of CRC patients") +
+  scale_color_jco(na.value = "white") +
+  theme_minimal()
 ```
 
 
