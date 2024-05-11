@@ -153,7 +153,7 @@ saveRDS(object = crc_data,
 
 ```{r Limma Pipeline for identifying DE Genes}
 clinical_data = colData(crc_data)
-group = factor(clinical_data$definition)
+group = as.factor(clinical_data$definition)
 group = relevel(group, ref="Solid Tissue Normal")
 
 design = model.matrix(~group)
@@ -162,9 +162,11 @@ head(design)
 #Remove genes, which have low amount of counts
 dge = DGEList( # creating a DGEList object
   counts=assay(crc_data),
-  design = model.matrix(~group),
+  design = model.matrix(~factor(crc_data@colData$definition)),
   samples=colData(crc_data),
   genes=as.data.frame(rowData(crc_data)))
+library(DEFormats)
+dds = as.DESeqDataSet(dge)
 
 # filtering
 keep = filterByExpr(dge, design, min.count=10) # defining which genes to keep
@@ -253,16 +255,17 @@ head(crc_data@colData$age_at_diagnosis)
 head(crc_data@colData$gender)
 head(crc_data@colData$ajcc_pathologic_stage)
 head(crc_data@colData$race)
+head(crc_data@colData$tissue_or_organ_of_origin)
 
-pt_id_age <- as.data.frame(cbind(crc_data@colData$patient, crc_data@colData$age_at_index, crc_data@colData$age_at_diagnosis, crc_data@colData$gender, crc_data@colData$ajcc_pathologic_stage, crc_data@colData$race))
-colnames(pt_id_age) <- c("patient", "age_at_index", "age_at_diagnosis", "gender", "Tumor_Stage", "Race")
+pt_id_age <- as.data.frame(cbind(crc_data@colData$patient, crc_data@colData$age_at_index, crc_data@colData$age_at_diagnosis, crc_data@colData$gender, crc_data@colData$ajcc_pathologic_stage, crc_data@colData$race,crc_data@colData$tissue_or_organ_of_origin))
+colnames(pt_id_age) <- c("patient", "age_at_index", "age_at_diagnosis", "gender", "Tumor_Stage", "Race", "Tumor_Location")
 pt_id_age$age_at_index <- as.numeric(pt_id_age$age_at_index)
 pt_id_age$age_at_diagnosis <- as.numeric(pt_id_age$age_at_diagnosis)
 pt_id_age$age_at_diagnosis <- (pt_id_age$age_at_diagnosis)/365
 pt_id_age$gender <- as.factor(pt_id_age$gender)
 pt_id_age$Tumor_Stage <- as.factor(pt_id_age$Tumor_Stage)
 pt_id_age$Race <- as.factor(pt_id_age$Race)
-
+pt_id_age$Tumor_Location <- as.factor(pt_id_age$Tumor_Location)
 
 
 library(dplyr)
@@ -307,15 +310,30 @@ ggplot(crc_mut_sub2, aes(x=age_at_diagnosis, color=Hugo_Symbol, fill=HGVSp_Short
   theme_minimal()
 ```
 
+### Patient distribution with Tumor Location
+```{r}
+colourCount = length(unique(crc_mut_sub2$HGVSp_Short))
+getPalette = colorRampPalette(brewer.pal(9, "Spectral"))
+ggplot(crc_mut_sub2, aes(x=Tumor_Location, color=Hugo_Symbol)) +
+  geom_bar(aes(fill=HGVSp_Short), position="fill") +
+  xlab("Tumor Location") + ylab("Number of Patients") +
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Accent"))(colourCount), na.value = "white") +
+  scale_color_jco(na.value = "white") +
+  theme_minimal() +
+  scale_y_continuous(labels=scales::percent) +
+   scale_x_discrete(guide = guide_axis(n.dodge = 4))
+```
+
+
+### Patient distribution with Race
 ```{r}
 ggplot(crc_mut_sub2, aes(x=Race, color=Hugo_Symbol, fill=HGVSp_Short)) +
   geom_bar() +
   xlab("Patient Race") + ylab("Number of Patients") +
   scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Accent"))(colourCount), na.value = "white") +
-  #labs(title="Distribution of CRC patients") +
   scale_color_jco(na.value = "white") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
 
@@ -336,6 +354,94 @@ ggplot(crc_mut_sub2, aes(x=Tumor_Stage, color=Hugo_Symbol, fill=HGVSp_Short)) +
 
 
 #### Code for BRAF and it's variants
+```{r}
+#which(CRC_Mut_data$HGVSp_Short=="p.G12D")
+
+crc_mut_sub1 <- CRC_Mut_data[unlist(lapply(common.patients, function(x) grep(x, CRC_Mut_data$Tumor_Sample_Barcode))),]
+
+crc_mut_braf2 <- crc_mut_sub1[which(crc_mut_sub1$Hugo_Symbol=="BRAF"),]
+
+crc_mut_sub1$patient <- substr(crc_mut_sub1$Tumor_Sample_Barcode, 1, 12)
+crc_mut_braf2$patient <- substr(crc_mut_braf2$Tumor_Sample_Barcode, 1, 12)
+
+pt_id_age <- as.data.frame(cbind(crc_data@colData$patient, crc_data@colData$age_at_index, crc_data@colData$age_at_diagnosis, crc_data@colData$gender, crc_data@colData$ajcc_pathologic_stage, crc_data@colData$race))
+colnames(pt_id_age) <- c("patient", "age_at_index", "age_at_diagnosis", "gender", "Tumor_Stage", "Race")
+pt_id_age$age_at_index <- as.numeric(pt_id_age$age_at_index)
+pt_id_age$age_at_diagnosis <- as.numeric(pt_id_age$age_at_diagnosis)
+pt_id_age$age_at_diagnosis <- (pt_id_age$age_at_diagnosis)/365
+pt_id_age$gender <- as.factor(pt_id_age$gender)
+pt_id_age$Tumor_Stage <- as.factor(pt_id_age$Tumor_Stage)
+pt_id_age$Race <- as.factor(pt_id_age$Race)
+
+
+library(dplyr)
+crc_mut_sub1 <- full_join(crc_mut_sub1, pt_id_age, by="patient", relationship = "many-to-many")
+
+crc_mut_braf2 <- full_join(crc_mut_braf2, pt_id_age, by="patient", relationship = "many-to-many")
+crc_mut_braf2[which(is.na(crc_mut_braf2$Hugo_Symbol)),"Hugo_Symbol"] <- "No_BRAF"
+
+crc_mut_braf2$Hugo_Symbol <- as.factor(crc_mut_braf2$Hugo_Symbol)
+crc_mut_braf2$patient <- as.factor(crc_mut_braf2$patient)
+crc_mut_braf2$HGVSp_Short <- as.factor(crc_mut_braf2$HGVSp_Short)
+library(ggsci)
+```
+
+```{r}
+colourCount = length(unique(crc_mut_braf2$HGVSp_Short))
+getPalette = colorRampPalette(brewer.pal(9, "Spectral"))
+ggplot(crc_mut_braf2, aes(x=age_at_diagnosis, color=Hugo_Symbol, fill=HGVSp_Short)) +
+  geom_histogram(binwidth = 10) +
+  xlab("Age at CRC Diagnosis") + ylab("Number of Patients") +
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Accent"))(colourCount), na.value = "white") +
+  #labs(title="Distribution of CRC patients") +
+  scale_color_jco(na.value = "white") +
+  theme_minimal()
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+##### Data on KDR (VEGFR1 Receptor)
+```{r}
+expr_diseased = d_mat[rownames(clin_df), gene_id]
+expr_healthy = d_mat[setdiff(rownames(d_mat), rownames(clin_df)), gene_id]
+
+boxplot(expr_diseased, expr_healthy,
+        names=c("Diseased", "Healthy"), main="Distribution of gene expression")
+
+rowData(crc_data[which(crc_data@rowRanges$gene_name=="KDR")])
+KDR_clinical <- crc_data@colData[,c("sample_type", "patient", "barcode")]
+KDR_clinical <- as.data.frame(KDR_clinical@listData, row.names = KDR_clinical@rownames )
+KDR_clinical$Sample_ID <- rownames(KDR_clinical)
+KDR <- as.data.frame(assay(crc_data)["ENSG00000128052.10",])
+KDR$Sample_ID <- rownames(KDR)
+KDR_dataset = full_join(KDR, KDR_clinical, by = "Sample_ID")
+str(KDR_dataset)
+KDR_dataset$patient <- as.factor(KDR_dataset$patient)
+KDR_dataset$sample_type <- as.factor(KDR_dataset$sample_type)
+KDR_dataset$barcode <- as.factor(KDR_dataset$barcode)
+
+ggplot(KDR_dataset, aes(x=sample_type, y=log10(`assay(crc_data)["ENSG00000128052.10", ]`))) +
+  geom_boxplot(aes(colour = sample_type, fill=patient)) +
+  geom_jitter(alpha=0.5, size=1) +
+  guides(fill="none") +
+  theme_minimal()
+```
+
+
+```{r}
+
+```
+
 ```{r}
 
 ```
