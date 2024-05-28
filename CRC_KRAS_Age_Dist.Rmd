@@ -68,6 +68,7 @@ head(crc_res$sample_type)
 # summary of distinct tissues types present in this study
 summary(factor(crc_res$sample_type))
 ```
+
 There are 51 normal tissue samples, 647 primary CRC tumor types, 1 Metastatic and 2 Recurrent Tumor types. Filtering the dataset to include only Primary and Normal solid tissue types.
 
 ```{r}
@@ -148,6 +149,8 @@ head(rowData(crc_data))#ensembl id and gene id of the first 6 genes.
 saveRDS(object = crc_data,
         file = "crc_RNAseq_data.RDS",
         compress = FALSE)
+
+crc_data <- readRDS("crc_RNAseq_data.RDS", refhook = NULL)
 ```
 
 
@@ -162,8 +165,8 @@ head(design)
 #Remove genes, which have low amount of counts
 dge = DGEList( # creating a DGEList object
   counts=assay(crc_data),
-  design = model.matrix(~factor(crc_data@colData$definition)),
   samples=colData(crc_data),
+  group=factor(crc_data@colData$sample_type),
   genes=as.data.frame(rowData(crc_data)))
 library(DEFormats)
 dds = as.DESeqDataSet(dge)
@@ -183,7 +186,7 @@ v = voom(dge,design,plot=TRUE)
 fit = lmFit(v, design)
 fit = eBayes(fit)
 
-topGenes = topTable(fit, coef=1, sort.by="p", number = 1000)
+topGenes = topTable(fit, coef=1, sort.by="p", number = 7000)
 print(topGenes)
 
 ```
@@ -228,6 +231,7 @@ Downloading the somatic mutations Data File
 ```{r}
 GDCdownload(query = CRC_Mut)
 
+crc_mut <- GDCprepare(CRC_Mut)
 ```
 
 #Loading the data in R
@@ -404,13 +408,48 @@ ggplot(crc_mut_braf2, aes(x=age_at_diagnosis, color=Hugo_Symbol, fill=HGVSp_Shor
 
 ```
 
-
+#### Code for VEGFA mutations with Tumor staging
 ```{r}
 
+crc_mut_sub1 <- CRC_Mut_data[unlist(lapply(common.patients, function(x) grep(x, CRC_Mut_data$Tumor_Sample_Barcode))),]
+crc_mut_vegf2 <- crc_mut_sub1[which(crc_mut_sub1$Hugo_Symbol=="VEGFA"),]
+crc_mut_sub1$patient <- substr(crc_mut_sub1$Tumor_Sample_Barcode, 1, 12)
+crc_mut_vegf2$patient <- substr(crc_mut_vegf2$Tumor_Sample_Barcode, 1, 12)
+pt_id_age <- as.data.frame(cbind(crc_data@colData$patient, crc_data@colData$age_at_index, crc_data@colData$age_at_diagnosis, crc_data@colData$gender, crc_data@colData$ajcc_pathologic_stage, crc_data@colData$race))
+colnames(pt_id_age) <- c("patient", "age_at_index", "age_at_diagnosis", "gender", "Tumor_Stage", "Race")
+pt_id_age$age_at_index <- as.numeric(pt_id_age$age_at_index)
+pt_id_age$age_at_diagnosis <- as.numeric(pt_id_age$age_at_diagnosis)
+pt_id_age$age_at_diagnosis <- (pt_id_age$age_at_diagnosis)/365
+pt_id_age$gender <- as.factor(pt_id_age$gender)
+pt_id_age$Tumor_Stage <- as.factor(pt_id_age$Tumor_Stage)
+pt_id_age$Race <- as.factor(pt_id_age$Race)
+
+
+library(dplyr)
+crc_mut_sub1 <- full_join(crc_mut_sub1, pt_id_age, by="patient", relationship = "many-to-many")
+
+crc_mut_vegf2 <- right_join(crc_mut_vegf2, pt_id_age, by="patient", relationship = "many-to-many")
+crc_mut_vegf2[which(is.na(crc_mut_vegf2$Hugo_Symbol)),"Hugo_Symbol"] <- "No_VEGF"
+
+crc_mut_vegf2$Hugo_Symbol <- as.factor(crc_mut_vegf2$Hugo_Symbol)
+crc_mut_vegf2$patient <- as.factor(crc_mut_vegf2$patient)
+crc_mut_vegf2$HGVSp_Short <- as.factor(crc_mut_vegf2$HGVSp_Short)
+library(ggsci)
+
+colourCount = length(unique(crc_mut_vegf2$HGVSp_Short))
+getPalette = colorRampPalette(brewer.pal(9, "Spectral"))
+ggplot(crc_mut_sub1, aes(x=Tumor_Stage, color=Hugo_Symbol, fill=HGVSp_Short)) +
+  geom_bar() +
+  xlab(" CRC Stage") + ylab("Number of Patients") +
+  #scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Accent"))(colourCount), na.value = "white") +
+  #labs(title="Distribution of CRC patients") +
+  scale_color_jco(na.value = "white") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
 
-##### Data on KDR (VEGFR1 Receptor)
+##### Gene Expression Data on KDR (VEGFR1 Receptor)
 ```{r}
 expr_diseased = d_mat[rownames(clin_df), gene_id]
 expr_healthy = d_mat[setdiff(rownames(d_mat), rownames(clin_df)), gene_id]
@@ -419,7 +458,7 @@ boxplot(expr_diseased, expr_healthy,
         names=c("Diseased", "Healthy"), main="Distribution of gene expression")
 
 rowData(crc_data[which(crc_data@rowRanges$gene_name=="KDR")])
-KDR_clinical <- crc_data@colData[,c("sample_type", "patient", "barcode")]
+KDR_clinical <- crc_data@colData[,c("sample_type", "patient", "barcode", "ajcc_pathologic_stage")]
 KDR_clinical <- as.data.frame(KDR_clinical@listData, row.names = KDR_clinical@rownames )
 KDR_clinical$Sample_ID <- rownames(KDR_clinical)
 KDR <- as.data.frame(assay(crc_data)["ENSG00000128052.10",])
@@ -429,20 +468,84 @@ str(KDR_dataset)
 KDR_dataset$patient <- as.factor(KDR_dataset$patient)
 KDR_dataset$sample_type <- as.factor(KDR_dataset$sample_type)
 KDR_dataset$barcode <- as.factor(KDR_dataset$barcode)
+KDR_dataset$ajcc_pathologic_stage <- as.factor(KDR_dataset$ajcc_pathologic_stage)
 
-ggplot(KDR_dataset, aes(x=sample_type, y=log10(`assay(crc_data)["ENSG00000128052.10", ]`))) +
-  geom_boxplot(aes(colour = sample_type, fill=patient)) +
-  geom_jitter(alpha=0.5, size=1) +
+ggplot(KDR_dataset, aes(x=ajcc_pathologic_stage, y=log10(`assay(crc_data)["ENSG00000128052.10", ]`))) +
+  geom_boxplot(aes(fill=sample_type)) +
+  geom_jitter(alpha=0.5, size=1, width= 0.25, aes(colour = sample_type)) +
   guides(fill="none") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90))
 ```
 
-
+#VEGFA expression by tumor stage
 ```{r}
+rowData(crc_data[which(crc_data@rowRanges$gene_name=="VEGFA")])
+VEGFA_clinical <- crc_data@colData[,c("sample_type", "patient", "barcode", "ajcc_pathologic_stage")]
+VEGFA_clinical <- as.data.frame(VEGFA_clinical@listData, row.names = VEGFA_clinical@rownames )
+VEGFA_clinical$Sample_ID <- rownames(VEGFA_clinical)
+VEGFA <- as.data.frame(assay(crc_data)["ENSG00000112715.25",])
+VEGFA$Sample_ID <- rownames(VEGFA)
+VEGFA_dataset = full_join(VEGFA, VEGFA_clinical, by = "Sample_ID")
+str(VEGFA_dataset)
+VEGFA_dataset$patient <- as.factor(VEGFA_dataset$patient)
+VEGFA_dataset$sample_type <- as.factor(VEGFA_dataset$sample_type)
+VEGFA_dataset$barcode <- as.factor(VEGFA_dataset$barcode)
+VEGFA_dataset$ajcc_pathologic_stage <- as.factor(VEGFA_dataset$ajcc_pathologic_stage)
 
+ggplot(VEGFA_dataset, aes(x=sample_type, y=log10(`assay(crc_data)["ENSG00000112715.25", ]`))) +
+  geom_boxplot(aes(fill=sample_type)) +
+  geom_jitter(alpha=0.5, size=1, width= 0.25, aes(colour = sample_type)) +
+  guides(fill="none") +
+  theme_minimal() + ylab("Normalized expression of VEGFA") +
+  theme(axis.text.x = element_text(angle=90))
+
+ggplot(VEGFA_dataset, aes(x=ajcc_pathologic_stage, y=log10(`assay(crc_data)["ENSG00000112715.25", ]`))) +
+  geom_boxplot(aes(fill=sample_type)) +
+  geom_jitter(alpha=0.5, size=1, width= 0.25, aes(colour = sample_type)) +
+  guides(fill="none") +
+  theme_minimal() + ylab("Normalized expression of VEGFA") +
+  theme(axis.text.x = element_text(angle=90))
 ```
 
+Gene Expression by Tumor Stage
 ```{r}
+
+gene_id <- c("ENSG00000128052.10" , "ENSG00000112715.25", "ENSG00000261371.6", "ENSG00000119888.11")
+gene_name <- c("KDR", "VEGFA", "PECAM1", "EPCAM")
+Exp_dataset <- list()
+Var_X <- c("ajcc_pathologic_stage", "sample_type")
+
+library(dplyr)
+for (i in gene_id) {
+  print(i)
+  Gene_clinical <- crc_data@colData[,c("sample_type", "patient", "barcode", "ajcc_pathologic_stage", "gender", "tissue_or_organ_of_origin")]
+  Gene_clinical <- as.data.frame(Gene_clinical@listData, row.names = Gene_clinical@rownames )
+  Gene_clinical$Sample_ID <- rownames(Gene_clinical)
+  Gene <- as.data.frame(assay(crc_data)[i,])
+  Gene$Sample_ID <- rownames(Gene)
+  Exp_dataset[[i]] = full_join(Gene, Gene_clinical, by = "Sample_ID")
+  Exp_dataset[[i]]$patient <- as.factor(Exp_dataset[[i]]$patient)
+  Exp_dataset[[i]]$sample_type <- as.factor(Exp_dataset[[i]]$sample_type)
+  Exp_dataset[[i]]$barcode <- as.factor(Exp_dataset[[i]]$barcode)
+  Exp_dataset$ajcc_pathologic_stage <- as.factor(Exp_dataset$ajcc_pathologic_stage)
+  
+  p <- ggplot(Exp_dataset[[i]], aes(x=ajcc_pathologic_stage, y=log10(`assay(crc_data)[i, ]`))) +
+  geom_boxplot(aes(fill=sample_type)) +
+  geom_jitter(alpha=0.5, size=1, width= 0.25, aes(colour = sample_type, pch=sample_type)) +
+  guides(fill="none") +
+  theme_minimal() + ylab(paste0("Normalized expression of ", gene_name[which(gene_id==i)])) +
+  theme(axis.text.x = element_text(angle=90))
+  print(p)
+  
+  q <- ggplot(Exp_dataset[[i]], aes(x=tissue_or_organ_of_origin, y=log10(`assay(crc_data)[i, ]`))) +
+  geom_boxplot(aes(fill=sample_type)) +
+  geom_jitter(alpha=0.5, size=1, width= 0.25, aes(colour = factor(tissue_or_organ_of_origin), pch=sample_type)) +
+  guides(fill="none") + guides(color="none") +
+  theme_minimal() + ylab(paste0("Normalized expression of ", gene_name[which(gene_id==i)])) +
+  theme(axis.text.x = element_text(angle=90))
+  print(q)
+}
 
 ```
 
