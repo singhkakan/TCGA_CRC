@@ -1,0 +1,94 @@
+---
+title: "CRC_TCGA_finalized code"
+author: "Shruti Kakan"
+date: "2024-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library("TCGAbiolinks")
+#if (!require("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("limma")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+#library("genefilter")
+setwd("~/Documents/TCGA/TCGA/")
+```
+
+#Downloading and saving TCGA datasets from Colon and Rectal Adenocarcinoma (COAD & ROAD, respectively)
+
+```{r Sequencing and patient infor datasets}
+#Project_id codes "TCGA-COAD", "TCGA-READ" will obtain data for colon and recatal adenocarcinoma.
+#The data types "Transcriptome Profiling" and "Gene Expression Quantification" tables contain the patient specific clinical information.
+#Filtering the dataset to include only Primary and Normal solid tissue types.
+CRC_RNAseq = GDCquery(
+  project = c("TCGA-COAD", "TCGA-READ"),
+  data.category = "Transcriptome Profiling", 
+  data.type = "Gene Expression Quantification",
+  experimental.strategy = "RNA-Seq",
+  workflow.type = "STAR - Counts",
+  sample.type = c("Primary Tumor", "Solid Tissue Normal"))
+
+crc_res = getResults(CRC_RNAseq) 
+
+#This command will download data in local repository
+#GDCdownload(query = CRC_TCGA)
+crc_data = GDCprepare(CRC_TCGA)
+
+# Save the data as a file, if you need it later, you can just load this file
+# instead of having to run the whole pipeline again
+saveRDS(object = crc_data,
+        file = "crc_RNAseq_data.RDS",
+        compress = FALSE)
+```
+
+#Start from here => by reading in the downloaded data file.
+```{r}
+crc_data <- readRDS("crc_RNAseq_data.RDS", refhook = NULL)
+```
+
+#Mutation Datasets
+
+### Obtain Colon Adenocarconoma SNV datasets COAD
+Querying all Single Nucleotide Variation data from COAD project
+READ is rectal adenocarcinoma
+```{r}
+CRC_Mut = GDCquery(
+  project = c("TCGA-COAD","TCGA-READ"),
+  data.category = "Simple Nucleotide Variation",
+  data.type = "Masked Somatic Mutation")
+
+View(getResults(CRC_Mut))
+
+# Get all patients for who we have DNA methylation, mutation data and gene expression data.
+common.patients <- intersect(
+    substr(getResults(CRC_TCGA, cols = "cases"), 1, 12),
+    substr(getResults(CRC_Mut, cols = "cases"), 1, 12))
+
+#Querying Data for Somatic Mutations in Colon and Rectum Adenocarcinoma
+CRC_Mut_res = getResults(CRC_Mut) # make results as table
+colnames(CRC_Mut) # columns present in the table
+
+
+```
+
+#Survival analysis
+```{r}
+
+```
+
